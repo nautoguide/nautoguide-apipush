@@ -1,2 +1,3 @@
+FILE/SQL: test.sql
 SQL: SELECT * FROM users;
 API: {"api": "configuration_api", "action": "list_users"}

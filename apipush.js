@@ -57,44 +57,166 @@ file.on('close', function() {
                 //Parse the format in the file by splitting on : once
                 var itemConfig = item.split(/: (.+)?/, 2);
 
-                //Figure out what type of call to run. Uppercasing to cope with non-uppercase values
-                switch (itemConfig[0].toUpperCase()) {
+                //Uppercasing to cope with non-uppercase values
+                var runType = itemConfig[0].toUpperCase();
+                var sqlType = 'raw';
+                var runContent = itemConfig[1];
+
+                //Detecting if a file needs to be loaded
+                if (/file\/.*/ig.test(runType)) {
+                    var fileOptions = runType.split('/');
+
+                    runType = fileOptions[1];
+
+                    if (fileOptions[2]) {
+                        sqlType = fileOptions[2];
+                    }
+
+                    runContent = fs.readFileSync(itemConfig[1]).toString();
+                }
+
+                //Figure out what type of call to run.
+                switch (runType) {
                     case "SQL": {
-                        console.log(truncate("Running SQL: " + itemConfig[1], process['stdout']['columns'] - 3));
+                        console.log(truncate("Running SQL: " + runContent, process['stdout']['columns'] - 3));
 
                         //Run the SQL on the server. If the call is successful it will continue with the queue after running otherwise it will stop
-                        callApi({
-                            "system_api": "api",
-                            "schema": config['schema'],
-                            "api": "admin_api",
-                            "action": "run_sql",
-                            "app": config['app'],
-                            "_token": token,
-                            "payload": {
-                                "sql": itemConfig[1]
+
+                        var runOptions;
+
+                        if (runContent.match(/\!auto_update\:/)) {
+                            var match = /(\!auto_update\:(\{.*\}))|(\!update_part\:(\{.*\}))/g.exec(runContent);
+
+                            if (match) {
+                                runOptions = JSON.parse(match[0].replace('!auto_update:', '').replace('!update_part:', ''));
+                                var lines = data.split('\n');
+
+                                lines.splice(0, 1);
+
+                                runContent = lines.join('\n');
                             }
-                        }, function(success, data) {
-                            if (!success) {
-                                callback(data);
+                        }
+
+                        switch (sqlType) {
+                            case "report": {
+                                callApi({
+                                    "system_api": "api",
+                                    "schema": config['schema'],
+                                    "api": "reporting_api",
+                                    "action": "update_report",
+                                    "app": config['app'],
+                                    "_token": token,
+                                    "payload": {
+                                        'report_name': runOptions['name'],
+                                        'report_query': runContent,
+                                        'report_template': runOptions['template'],
+                                        'report_filter': runOptions['filter_id'],
+                                        'report_attributes': runOptions['attributes']
+                                    }
+                                }, function (success, data) {
+                                    if (!success) {
+                                        callback(data);
+                                    }
+                                    else {
+                                        callback(null);
+                                    }
+                                });
+
+                                break;
                             }
-                            else {
-                                callback(null);
+
+                            case "filter": {
+                                callApi({
+                                    "system_api": "api",
+                                    "schema": config['schema'],
+                                    "api": "reporting_api",
+                                    "action": "update_filter",
+                                    "app": config['app'],
+                                    "_token": token,
+                                    "payload": {
+                                        'filter_name': runOptions['name'],
+                                        'filter': JSON.parse(runContent),
+                                        'filter_type': runOptions['filter_type'] ? runOptions['filter_type'] : 'I'
+                                    }
+                                }, function (success, data) {
+                                    if (!success) {
+                                        callback(data);
+                                    }
+                                    else {
+                                        callback(null);
+                                    }
+                                });
+
+                                break;
                             }
-                        });
+
+                            case "script": {
+                                callApi({
+                                    "system_api": "api",
+                                    "schema": config['schema'],
+                                    "api": "configuration_api",
+                                    "action": "set_client_resource",
+                                    "app": config['app'],
+                                    "_token": token,
+                                    "payload": {
+                                        'resource_name': runOptions['name'],
+                                        'resource_value': new Buffer(runContent).toString('base64'),
+                                        'mime_type': runOptions['mime']
+                                    }
+                                }, function (success, data) {
+                                    if (!success) {
+                                        callback(data);
+                                    }
+                                    else {
+                                        callback(null);
+                                    }
+                                });
+
+                                break;
+                            }
+
+                            case "raw": {
+                                callApi({
+                                    "system_api": "api",
+                                    "schema": config['schema'],
+                                    "api": "admin_api",
+                                    "action": "run_sql",
+                                    "app": config['app'],
+                                    "_token": token,
+                                    "payload": {
+                                        "sql": runContent
+                                    }
+                                }, function (success, data) {
+                                    if (!success) {
+                                        callback(data);
+                                    }
+                                    else {
+                                        callback(null);
+                                    }
+                                });
+
+                                break;
+                            }
+
+                            default: {
+                                console.error("Unknown SQL Type '" + sqlType + "' Found");
+                            }
+                        }
 
                         break;
                     }
 
                     case "API": {
-                        console.log(truncate("Calling API: " + itemConfig[1], process['stdout']['columns'] - 3));
+                        console.log(truncate("Calling API: " + runContent, process['stdout']['columns'] - 3));
 
                         //Call the API. If the call is successful it will continue with the queue after running otherwise it will stop
-                        callApi(extend(true, JSON.parse(itemConfig[1]), {
+
+                        callApi(extend(true, {
                             "system_api": "api",
                             "_token": token,
                             "schema": config['schema'],
                             "app": config['app']
-                        }), function(success, data) {
+                        }, JSON.parse(runContent)), function(success, data) {
                             if (!success) {
                                 callback(data);
                             }
@@ -166,7 +288,7 @@ function truncate(text, length) {
     var truncated = text.substring(0, length);
 
     if (truncated.length !== text.length) {
-        return truncated  + "...";
+        return truncated + "...";
     }
     else {
         return truncated;
