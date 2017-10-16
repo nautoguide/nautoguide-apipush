@@ -89,7 +89,7 @@ file.on('close', function() {
 
                             if (match) {
                                 runOptions = JSON.parse(match[0].replace('!auto_update:', '').replace('!update_part:', ''));
-                                var lines = data.split('\n');
+                                var lines = runContent.split('\n');
 
                                 lines.splice(0, 1);
 
