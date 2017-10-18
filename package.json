@@ -3,9 +3,11 @@
   "version": "1.0.0",
   "description": "A tool to push project configuration to the Nautoguide V2 API",
   "main": "apipush",
+  "bin": "./apipush.js",
   "dependencies": {
     "async": "~2.5.0",
     "extend": "~3.0.1",
+    "pg": "~7.3.0",
     "xhr-request": "~1.0.1"
   },
   "repository": {
