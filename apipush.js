@@ -1,3 +1,5 @@
+#!/usr/bin/env node
+
 //Libraries
 const request = require('xhr-request');
 const fs = require('fs');
@@ -20,13 +22,13 @@ fileCheck(args[0], args[1]);
 const debug = (args[2] ? args[2] : false);
 
 //Load the configuration file
-let config = require("./" + args[0]);
+let config = require(process.cwd() + "/" + args[0]);
 
 let run = [];
 
 //Find out what needs to be run
 let file = lineReader.createInterface({
-    input: fs.createReadStream(args[1])
+    input: fs.createReadStream(process.cwd() + "/" + args[1])
 });
 
 //For every line in the run file, populate the array with the value
@@ -44,7 +46,6 @@ file.on('close', function() {
         password: config['pass'],
         database: config['database']
     });
-
 
     //Connect to the database. This will log out an error if it can't connect successfully
     client.connect((error) => {
@@ -75,7 +76,7 @@ async function loopData(data) {
         }
 
         try {
-            console.log(truncate("Running SQL: " + runContent, process['stdout']['columns'] - 3));
+            console.log(truncate("Running SQL: " + runContent.split('\n')[0], process['stdout']['columns'] - 3));
 
             //Run the query against the database
             let result = await client.query(runContent);
