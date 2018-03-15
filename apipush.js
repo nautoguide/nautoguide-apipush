@@ -32,7 +32,10 @@ let file = lineReader.createInterface({
 
 //For every line in the run file, populate the array with the value
 file.on('line', function(line) {
-    run.push(line);
+    //Check if the line is commented out. Exclude it from the run config if so
+    if (!line.startsWith("--")) {
+        run.push(line);
+    }
 });
 
 //Once the file has been read, process each line
