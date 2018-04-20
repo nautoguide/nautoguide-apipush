@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
 //Libraries
-const request = require('xhr-request');
 const fs = require('fs');
 const lineReader = require('readline');
 const { Client } = require('pg');
@@ -33,7 +32,10 @@ let file = lineReader.createInterface({
 
 //For every line in the run file, populate the array with the value
 file.on('line', function(line) {
-    run.push(line);
+    //Check if the line is commented out. Exclude it from the run config if so
+    if (!line.startsWith("--")) {
+        run.push(line);
+    }
 });
 
 //Once the file has been read, process each line
@@ -54,10 +56,14 @@ file.on('close', function() {
             console.error("Error logging into the database", error['stack']);
         }
         else {
-            //Run through the run file
-            loopData(run)
+            //Set the search path
+            client.query("SET SEARCH_PATH = " + (config['schema'] || config['user'].replace("_user", "")) + ", public, ng_rest")
                 .then(function() {
-                    client.end();
+                    //Run through the run file
+                    loopData(run)
+                        .then(function() {
+                            client.end();
+                        });
                 });
         }
     });
