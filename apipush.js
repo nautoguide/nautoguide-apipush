@@ -118,8 +118,14 @@ async function loopData(data) {
                 }, data);
             }
             else {
-                runContent = fs.readFileSync(itemConfig[1]).toString();
-                execute = true;
+                if (fs.existsSync(runContent)) {
+                    runContent = fs.readFileSync(runContent).toString();
+                    execute = true;
+                }
+                else {
+                    console.log("FILE NOT FOUND: " + runContent);
+                    process.exit(1);
+                }
             }
         }
         else {
