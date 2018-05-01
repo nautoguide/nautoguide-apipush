@@ -87,9 +87,11 @@ file.on('close', function() {
     });
 
     //If notice statements are raised, log them out
-    client.on('notification', function(msg) {
-        console.log("NOTICE: " + msg);
+    client.on('notice', function(msg) {
+        console.log("[DEBUG]: " + msg);
     });
+
+
 });
 
 async function loopData(data) {
@@ -142,7 +144,8 @@ async function loopData(data) {
                 debugMsg(5, result);
             }
             catch (error) {
-                console.error(error);
+                console.log("[ERROR]: " + error);
+                
                 process.exit(1);
             }
         }
