@@ -2,8 +2,10 @@
 
 //Libraries
 const fs = require('fs');
+const path = require('path');
 const lineReader = require('readline');
 const { Client } = require('pg');
+const readdir = require('readdir-enhanced');
 
 let client;
 
@@ -33,10 +35,26 @@ let file = lineReader.createInterface({
 //For every line in the run file, populate the array with the value
 file.on('line', function(line) {
     //Check if the line is commented out. Exclude it from the run config if so
-    if (!line.startsWith("--")) {
-        run.push(line);
+    if (line.startsWith("--")) {
+        return;
     }
+
+    run.push(line);
 });
+
+//Scan a directory with optional filter to find more files
+function directoryParse(type, directory, filter, data) {
+    readdir.sync(directory, {
+        deep: true,
+        filter: filter,
+        basePath: directory
+    }).forEach(file => {
+        //If it's a directory exclude it - directory recursion is handled by the library
+        if (!fs.lstatSync(file).isDirectory()) {
+            data.push(type + ": " + file);
+        }
+    });
+}
 
 //Once the file has been read, process each line
 file.on('close', function() {
@@ -67,31 +85,66 @@ file.on('close', function() {
                 });
         }
     });
+
+    //If notice statements are raised, log them out
+    client.on('notification', function(msg) {
+        console.log("NOTICE: " + msg);
+    });
 });
 
 async function loopData(data) {
-    for (let item of data) {
+    for (let i = 0; i < data.length; i++) {
+        let item = data[i];
+
         //Parse the format
         let itemConfig = item.split(/: (.+)?/, 2);
 
         let runContent = itemConfig[1];
 
+        let execute = false;
+
         //Detecting if a file needs to be loaded
         if (/file\/.*/ig.test(itemConfig[0].toUpperCase())) {
-            runContent = fs.readFileSync(itemConfig[1]).toString();
+            //If it's a directory that exists run through it
+            if (fs.existsSync(runContent) && fs.lstatSync(runContent).isDirectory()) {
+                directoryParse(itemConfig[0], runContent, null, data);
+                return;
+            }
+
+            //If there's a * in the name, assume regex and parse the directory to match
+            if (runContent.includes("*")) {
+                directoryParse(itemConfig[0], path.dirname(runContent), function(stats) {
+                    return new RegExp(path.basename(runContent)).test(path.basename(stats.path))
+                }, data);
+            }
+            else {
+                if (fs.existsSync(runContent)) {
+                    runContent = fs.readFileSync(runContent).toString();
+                    execute = true;
+                }
+                else {
+                    console.log("FILE NOT FOUND: " + runContent);
+                    process.exit(1);
+                }
+            }
+        }
+        else {
+            execute = true;
         }
 
-        try {
-            console.log(truncate("Running SQL: " + runContent.split('\n')[0], process['stdout']['columns'] - 3));
+        if (execute) {
+            try {
+                console.log(truncate("Running SQL: " + runContent.split('\n')[0], process['stdout']['columns'] - 3));
 
-            //Run the query against the database
-            let result = await client.query(runContent);
+                //Run the query against the database
+                let result = await client.query(runContent);
 
-            debugMsg(5, result);
-        }
-        catch (error) {
-            console.error(error);
-            process.exit(1);
+                debugMsg(5, result);
+            }
+            catch (error) {
+                console.error(error);
+                process.exit(1);
+            }
         }
     }
 }
