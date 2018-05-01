@@ -59,3 +59,5 @@ typings/
 
 # JetBrains IDE Files
 .idea/
+
+config.json

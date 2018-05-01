@@ -34,3 +34,17 @@ If you wish to exclude a call in the build file, you can comment it out by putti
 ```
 --FILE/SQL: test.sql
 ```
+
+You can also specify a directory to be processed, .e.g.:
+```
+FILE/SQL: testdir/
+```
+
+This will processed all files and folders inside of the `testdir/` directory.
+
+You can also pass a regex in the file name which will run against any file in the same directory, e.g.:
+```
+FILE/SQL: filter-*
+```
+
+This will check every file in the directory (and any sub-directories) against that regex. E.g. filter.sql won't be added but filter-test.sql will.
