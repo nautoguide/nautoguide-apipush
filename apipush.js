@@ -92,58 +92,108 @@ file.on('close', function() {
     });
 });
 
+let transaction = false;
+
 async function loopData(data) {
     for (let i = 0; i < data.length; i++) {
         let item = data[i];
 
-        //Parse the format
-        let itemConfig = item.split(/: (.+)?/, 2);
-
-        let runContent = itemConfig[1];
-
-        let execute = false;
-
-        //Detecting if a file needs to be loaded
-        if (/file\/.*/ig.test(itemConfig[0].toUpperCase())) {
-            //If it's a directory that exists run through it
-            if (fs.existsSync(runContent) && fs.lstatSync(runContent).isDirectory()) {
-                directoryParse(itemConfig[0], runContent, null, data);
-                return;
+        if (item === 'SQL/TRANSACTION') {
+            if (transaction) {
+                console.error("Already in transaction. Bad configuration likely.");
+                process.exit(1);
             }
 
-            //If there's a * in the name, assume regex and parse the directory to match
-            if (runContent.includes("*")) {
-                directoryParse(itemConfig[0], path.dirname(runContent), function(stats) {
-                    return new RegExp(path.basename(runContent)).test(path.basename(stats.path))
-                }, data);
+            transaction = true;
+
+            try {
+                await client.query('BEGIN');
             }
-            else {
-                if (fs.existsSync(runContent)) {
-                    runContent = fs.readFileSync(runContent).toString();
-                    execute = true;
-                }
-                else {
-                    console.log("FILE NOT FOUND: " + runContent);
-                    process.exit(1);
-                }
+            catch(error) {
+                console.log("Error running begin");
+                console.error(error);
+            }
+        }
+        else if (item === 'SQL/COMMIT') {
+            if (!transaction) {
+                console.log("No transaction found. Bad configuration likely.");
+                process.exit(1);
+            }
+
+            transaction = false;
+
+            try {
+                await client.query('COMMIT');
+            }
+            catch(error) {
+                console.log("Error running commit");
+                console.error(error);
             }
         }
         else {
-            execute = true;
-        }
+            //Parse the format
+            let itemConfig = item.split(/: (.+)?/, 2);
 
-        if (execute) {
-            try {
-                console.log(truncate("Running SQL: " + runContent.split('\n')[0], process['stdout']['columns'] - 3));
+            let runContent = itemConfig[1];
 
-                //Run the query against the database
-                let result = await client.query(runContent);
+            let execute = false;
 
-                debugMsg(5, result);
+            //Detecting if a file needs to be loaded
+            if (/file\/.*/ig.test(itemConfig[0].toUpperCase())) {
+                //If it's a directory that exists run through it
+                if (fs.existsSync(runContent) && fs.lstatSync(runContent).isDirectory()) {
+                    directoryParse(itemConfig[0], runContent, null, data);
+                    return;
+                }
+
+                //If there's a * in the name, assume regex and parse the directory to match
+                if (runContent.includes("*")) {
+                    directoryParse(itemConfig[0], path.dirname(runContent), function(stats) {
+                        return new RegExp(path.basename(runContent)).test(path.basename(stats.path))
+                    }, data);
+                }
+                else {
+                    if (fs.existsSync(runContent)) {
+                        runContent = fs.readFileSync(runContent).toString();
+                        execute = true;
+                    }
+                    else {
+                        console.log("FILE NOT FOUND: " + runContent);
+                        process.exit(1);
+                    }
+                }
             }
-            catch (error) {
-                console.error(error);
-                process.exit(1);
+            else {
+                execute = true;
+            }
+
+            if (execute) {
+                try {
+                    console.log(truncate("Running SQL: " + runContent.split('\n')[0], process['stdout']['columns'] - 3));
+
+                    //Run the query against the database
+                    let result = await client.query(runContent);
+
+                    debugMsg(5, result);
+                }
+                catch (error) {
+                    if (transaction) {
+                        try {
+                            await client.query('ROLLBACK');
+                            console.log(error);
+                            process.exit(1);
+                        }
+                        catch(error) {
+                            console.log("Error running rollback");
+                            console.error(error);
+                            process.exit(1);
+                        }
+                    }
+                    else {
+                        console.error(error);
+                        process.exit(1);
+                    }
+                }
             }
         }
     }
