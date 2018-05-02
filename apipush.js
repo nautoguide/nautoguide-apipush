@@ -191,7 +191,7 @@ async function processItem(item) {
                 console.log(truncate("Running SQL: " + runContent.split('\n')[0], process['stdout']['columns'] - 3));
 
                 //Run the query against the database
-                let result = await client.query(runContent.replace(new RegExp('/(?!\\n)\\p{C}/', '')));
+                let result = await client.query(runContent);
 
                 debugMsg(5, result);
             }
