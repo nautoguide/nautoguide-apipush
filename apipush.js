@@ -87,8 +87,8 @@ file.on('close', function() {
     });
 
     //If notice statements are raised, log them out
-    client.on('notification', function(msg) {
-        console.log("NOTICE: " + msg);
+    client.on('notice', function(msg) {
+        console.log("[DEBUG]: " + msg);
     });
 });
 
