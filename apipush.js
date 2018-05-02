@@ -142,15 +142,30 @@ async function loopData(data) {
             if (/file\/.*/ig.test(itemConfig[0].toUpperCase())) {
                 //If it's a directory that exists run through it
                 if (fs.existsSync(runContent) && fs.lstatSync(runContent).isDirectory()) {
-                    directoryParse(itemConfig[0], runContent, null, data);
+                    let subFiles = [];
+
+                    directoryParse(itemConfig[0], runContent, null, subFiles);
+
+                    await loopData(subFiles);
+
                     return;
                 }
 
                 //If there's a * in the name, assume regex and parse the directory to match
                 if (runContent.includes("*")) {
+                    let subFiles = [];
+
                     directoryParse(itemConfig[0], path.dirname(runContent), function(stats) {
-                        return new RegExp(path.basename(runContent)).test(path.basename(stats.path))
-                    }, data);
+                        try {
+                            return new RegExp(path.basename(runContent)).test(path.basename(stats.path));
+                        }
+                        catch(e) {
+                            console.log(e);
+                            return false;
+                        }
+                    }, subFiles);
+
+                    await loopData(subFiles);
                 }
                 else {
                     if (fs.existsSync(runContent)) {
