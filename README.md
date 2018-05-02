@@ -48,3 +48,14 @@ FILE/SQL: filter-*
 ```
 
 This will check every file in the directory (and any sub-directories) against that regex. E.g. filter.sql won't be added but filter-test.sql will.
+
+If you wish to run a set of SQL in a transaction, you can do so like this:
+```
+SQL/TRANSACTION
+FILE/SQL: test.sql
+SQL: SELECT * FROM test.test;
+SQL/COMMIT
+```
+
+SQL/TRANSACTION starts the transaction with a `BEGIN`, and any queries that error before the commit will trigger a `ROLLBACK` call to be made.
+Once all of the queries in a transaction have been called successfully, a `COMMIT` call will be made to finalise the changes.
