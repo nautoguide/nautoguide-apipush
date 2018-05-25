@@ -1,2 +1,4 @@
+SQL/TRANSACTION
 FILE/SQL: test.sql
 SQL: SELECT * FROM ng_geovey.users;
+SQL/COMMIT

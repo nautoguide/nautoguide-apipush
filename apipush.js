@@ -78,7 +78,7 @@ file.on('close', function() {
             client.query("SET SEARCH_PATH = " + (config['schema'] || config['user'].replace("_user", "")) + ", public, ng_rest")
                 .then(function() {
                     //Run through the run file
-                    loopData(run)
+                    preLoopData(run)
                         .then(function() {
                             client.end();
                         });
@@ -90,14 +90,51 @@ file.on('close', function() {
     client.on('notice', function(msg) {
         console.log("[DEBUG]: " + msg);
     });
-
-
 });
 
-async function loopData(data) {
-    for (let i = 0; i < data.length; i++) {
-        let item = data[i];
+let transaction = false;
 
+async function preLoopData(data) {
+    await loopData(data);
+}
+
+async function processItem(item) {
+    if (item === 'SQL/TRANSACTION') {
+        if (transaction) {
+            console.error("Already in transaction. Bad configuration likely.");
+            process.exit(1);
+        }
+
+        transaction = true;
+
+        console.log("---TRANSACTION---");
+
+        try {
+            await client.query('BEGIN');
+        }
+        catch(error) {
+            console.log("Error running begin");
+            console.error(error);
+        }
+    }
+    else if (item === 'SQL/COMMIT') {
+        if (!transaction) {
+            console.log("No transaction found. Bad configuration likely.");
+            process.exit(1);
+        }
+
+        transaction = false;
+
+        try {
+            await client.query('COMMIT');
+            console.log("---END TRANSACTION---");
+        }
+        catch(error) {
+            console.log("Error running commit");
+            console.error(error);
+        }
+    }
+    else {
         //Parse the format
         let itemConfig = item.split(/: (.+)?/, 2);
 
@@ -109,15 +146,30 @@ async function loopData(data) {
         if (/file\/.*/ig.test(itemConfig[0].toUpperCase())) {
             //If it's a directory that exists run through it
             if (fs.existsSync(runContent) && fs.lstatSync(runContent).isDirectory()) {
-                directoryParse(itemConfig[0], runContent, null, data);
+                let subFiles = [];
+
+                directoryParse(itemConfig[0], runContent, null, subFiles);
+
+                await loopData(subFiles);
+
                 return;
             }
 
             //If there's a * in the name, assume regex and parse the directory to match
             if (runContent.includes("*")) {
+                let subFiles = [];
+
                 directoryParse(itemConfig[0], path.dirname(runContent), function(stats) {
-                    return new RegExp(path.basename(runContent)).test(path.basename(stats.path))
-                }, data);
+                    try {
+                        return new RegExp(path.basename(runContent)).test(path.basename(stats.path));
+                    }
+                    catch(e) {
+                        console.log(e);
+                        return false;
+                    }
+                }, subFiles);
+
+                await loopData(subFiles);
             }
             else {
                 if (fs.existsSync(runContent)) {
@@ -144,11 +196,30 @@ async function loopData(data) {
                 debugMsg(5, result);
             }
             catch (error) {
-                console.log("[ERROR]: " + error);
-                
-                process.exit(1);
+                if (transaction) {
+                    try {
+                        await client.query('ROLLBACK');
+                        console.log(error);
+                        process.exit(1);
+                    }
+                    catch(error) {
+                        console.log("Error running rollback");
+                        console.error(error);
+                        process.exit(1);
+                    }
+                }
+                else {
+                    console.error(error);
+                    process.exit(1);
+                }
             }
         }
+    }
+}
+
+async function loopData(data) {
+    for (let i = 0; i < data.length; i++) {
+        await processItem(data[i]);
     }
 }
 
