@@ -25,6 +25,8 @@ const debug = (args[2] ? args[2] : false);
 //Load the configuration file
 let config = require(process.cwd() + "/" + args[0]);
 
+console.log(`Running APIPush against ${config['host']} using the ${config['database']} database`);
+
 let run = [];
 
 //Find out what needs to be run
